@@ -90,13 +90,16 @@ static uint8_t io_dcsel;
 static uint8_t blitcache[4]; // https://github.com/fvdhoef/vera-module/pull/32
 static const uint8_t blitmask[] = {0x00, 0x0f, 0xf0, 0xff};
 
+static uint16_t subpixel_x;
+static uint16_t subpixel_y;
+
 static uint8_t ien;
 static uint8_t isr;
 
 static uint16_t irq_line;
 
 static uint8_t reg_layer[2][7];
-static uint8_t reg_composer[8];
+static uint8_t reg_composer[16];
 
 static uint8_t layer_line[2][SCREEN_WIDTH];
 static uint8_t sprite_line_col[SCREEN_WIDTH];
@@ -132,10 +135,14 @@ video_reset()
 	// init I/O registers
 	memset(io_addr, 0, sizeof(io_addr));
 	memset(io_inc, 0, sizeof(io_inc));
+	memset(io_wrpattern, 0, sizeof(io_wrpattern));
+	memset(blitcache, 0, sizeof(blitcache));
 	io_addrsel = 0;
 	io_dcsel = 0;
 	io_rddata[0] = 0;
 	io_rddata[1] = 0;
+	subpixel_x = 128;
+	subpixel_y = 128;
 
 	ien = 0;
 	isr = 0;
@@ -1247,7 +1254,20 @@ uint32_t
 get_and_inc_address(uint8_t sel)
 {
 	uint32_t address = io_addr[sel];
-	io_addr[sel] += increments[io_inc[sel]];
+	if (io_dcsel == 2 && sel == 1) {
+		subpixel_x += reg_composer[8] | (reg_composer[9] << 8);
+		if (subpixel_x >= 256) {
+			subpixel_x -= 256;
+			io_addr[1] += increments[io_inc[0]];
+		}
+		subpixel_y += reg_composer[10] | (reg_composer[11] << 8);
+		if (subpixel_y >= 256) {
+			subpixel_y -= 256;
+			io_addr[1] += increments[io_inc[1]];
+		}
+	} else {
+		io_addr[sel] += increments[io_inc[sel]];
+	}
 	return address;
 }
 
@@ -1333,7 +1353,7 @@ uint8_t video_read(uint8_t reg, bool debugOn) {
 		case 0x09:
 		case 0x0A:
 		case 0x0B:
-		case 0x0C: return reg_composer[reg - 0x09 + (io_dcsel ? 4 : 0)];
+		case 0x0C: return reg_composer[reg - 0x09 + (io_dcsel << 2)];
 
 		case 0x0D:
 		case 0x0E:
@@ -1470,7 +1490,11 @@ void video_write(uint8_t reg, uint8_t value) {
 			if (value & 0x80) {
 				video_reset();
 			}
-			io_dcsel = (value >> 1) & 1;
+			if ((io_dcsel & 2) == 0 && (value & 4)) { // transitioning to affine mode resets subpixels
+				subpixel_x = 128;
+				subpixel_y = 128;
+			}
+			io_dcsel = (value >> 1) & 3;
 			io_addrsel = value & 1;
 			break;
 		case 0x06:
@@ -1488,18 +1512,25 @@ void video_write(uint8_t reg, uint8_t value) {
 		case 0x0A:
 		case 0x0B:
 		case 0x0C: {
-			int i = reg - 0x09 + (io_dcsel ? 4 : 0);
-			if (i == 0) {
-				// interlace field bit is read-only
-				reg_composer[0] = (reg_composer[0] & ~0x7f) | (value & 0x7f);
-				video_palette.dirty = true;
-				if ((value & 0x40) == 0) {
-					memset(sprite_line_col, 0, SCREEN_WIDTH);
-					memset(sprite_line_z, 0, SCREEN_WIDTH);
-					memset(sprite_line_mask, 0, SCREEN_WIDTH);
-				}
-			} else {
-				reg_composer[i] = value;
+			int i = reg - 0x09 + (io_dcsel << 2);
+			switch (i) {
+				case 0x0:
+					// interlace field bit is read-only
+					reg_composer[0] = (reg_composer[0] & ~0x7f) | (value & 0x7f);
+					video_palette.dirty = true;
+					if ((value & 0x40) == 0) {
+						memset(sprite_line_col, 0, SCREEN_WIDTH);
+						memset(sprite_line_z, 0, SCREEN_WIDTH);
+						memset(sprite_line_mask, 0, SCREEN_WIDTH);
+					}
+					break;
+				case 0x9:
+				case 0xb:
+					reg_composer[i] = value & 1;
+					break;
+				default:
+					reg_composer[i] = value;
+					break;
 			}
 			break;
 		}
