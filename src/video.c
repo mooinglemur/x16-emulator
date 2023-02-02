@@ -1256,12 +1256,12 @@ get_and_inc_address(uint8_t sel)
 	uint32_t address = io_addr[sel];
 	if (io_dcsel == 2 && sel == 1) {
 		subpixel_x += reg_composer[8] | (reg_composer[9] << 8);
-		if (subpixel_x >= 256) {
+		while (subpixel_x >= 256) {
 			subpixel_x -= 256;
 			io_addr[1] += increments[io_inc[0]];
 		}
 		subpixel_y += reg_composer[10] | (reg_composer[11] << 8);
-		if (subpixel_y >= 256) {
+		while (subpixel_y >= 256) {
 			subpixel_y -= 256;
 			io_addr[1] += increments[io_inc[1]];
 		}
