@@ -1490,11 +1490,11 @@ void video_write(uint8_t reg, uint8_t value) {
 			if (value & 0x80) {
 				video_reset();
 			}
-			if ((io_dcsel & 2) == 0 && (value & 4)) { // transitioning to affine mode resets subpixels
+			io_dcsel = (value >> 1) & 3;
+			if (io_dcsel & 2) { // setting affine mode resets subpixels
 				subpixel_x = 128;
 				subpixel_y = 128;
 			}
-			io_dcsel = (value >> 1) & 3;
 			io_addrsel = value & 1;
 			break;
 		case 0x06:
