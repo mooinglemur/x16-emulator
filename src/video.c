@@ -90,6 +90,8 @@ static uint8_t io_dcsel;
 static uint8_t blitcache[4]; // https://github.com/fvdhoef/vera-module/pull/32
 static const uint8_t blitmask[] = {0x00, 0x0f, 0xf0, 0xff};
 
+static uint8_t affine_blitcache_offset;
+static uint8_t affine_inc0;
 static uint16_t subpixel_x;
 static uint16_t subpixel_y;
 
@@ -143,6 +145,8 @@ video_reset()
 	io_rddata[1] = 0;
 	subpixel_x = 128;
 	subpixel_y = 128;
+	affine_blitcache_offset = 0;
+	affine_inc0 = 0;
 
 	ien = 0;
 	isr = 0;
@@ -1258,7 +1262,7 @@ get_and_inc_address(uint8_t sel)
 		subpixel_x += reg_composer[8] | (reg_composer[9] << 8);
 		while (subpixel_x >= 256) {
 			subpixel_x -= 256;
-			io_addr[1] += increments[io_inc[0]];
+			io_addr[1] += increments[affine_inc0];
 		}
 		subpixel_y += reg_composer[10] | (reg_composer[11] << 8);
 		while (subpixel_y >= 256) {
@@ -1331,13 +1335,18 @@ uint8_t video_read(uint8_t reg, bool debugOn) {
 			}
 
 			uint32_t address = get_and_inc_address(reg - 3);
+			uint8_t value = io_rddata[reg - 3];
 
 			// This is the "blit" cache read implemented in https://github.com/fvdhoef/vera-module/pull/32
-			if (address < 0x1f9c0 && io_wrpattern[reg - 3] == 0x3 && (address % 4 == 0)) {
-				video_space_read_range(blitcache, address, 4);
+			if (address < 0x1f9c0) {
+				if (io_wrpattern[reg - 3] == 0x3 && (address % 4 == 0)) {
+					video_space_read_range(blitcache, address, 4);
+				} else if (io_dcsel & 2 && reg - 3 == 1) { // affine cache read
+					blitcache[affine_blitcache_offset++] = value;
+					affine_blitcache_offset &= 0x3;
+				}
 			}
 
-			uint8_t value = io_rddata[reg - 3];
 			io_rddata[reg - 3] = video_space_read(io_addr[reg - 3]);
 
 			if (log_video) {
@@ -1490,11 +1499,15 @@ void video_write(uint8_t reg, uint8_t value) {
 			if (value & 0x80) {
 				video_reset();
 			}
-			io_dcsel = (value >> 1) & 3;
-			if (io_dcsel & 2) { // setting affine mode resets subpixels
+			
+			if (value & 4) { // setting affine mode resets subpixels
 				subpixel_x = 128;
 				subpixel_y = 128;
+				affine_blitcache_offset = 0;
+				if ((io_dcsel & 2) == 0) // rising edge
+					affine_inc0 = io_inc[0];
 			}
+			io_dcsel = (value >> 1) & 3;
 			io_addrsel = value & 1;
 			break;
 		case 0x06:
