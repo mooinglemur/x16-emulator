@@ -1282,7 +1282,7 @@ get_and_inc_address(uint8_t sel)
 		// affine_sub_xy_acc is a 16.16 fixed point pixel.subpixel accumulator
 		uint16_t incs;
 		uint32_t addrmask;
-		int32_t addr_offset;
+		uint32_t addr_offset;
 
 		const struct video_layer_properties *props = &layer_properties[io_affine_tex_layer];
 		uint8_t tex_row_width_bytes_log2 = (props->mapw_log2 + props->color_depth - 3);
