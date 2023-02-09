@@ -1288,7 +1288,7 @@ get_and_inc_address(uint8_t sel)
 		uint8_t tex_row_width_bytes_log2 = (props->mapw_log2 + props->color_depth - 3);
 		uint8_t tex_size_bytes_log2 = props->maph_log2 + tex_row_width_bytes_log2;
 
-		affine_sub_x_acc += (io_affine_sub_x_mantissa << 6) << io_affine_sub_x_exponent;
+		affine_sub_x_acc += io_affine_sub_x_mantissa << (7 + io_affine_sub_x_exponent);
 		incs = affine_sub_x_acc / 0x10000;
 		affine_sub_x_acc &= 0xffff;
 		if (incs) {
@@ -1305,7 +1305,7 @@ get_and_inc_address(uint8_t sel)
 				io_addr[1] += addr_offset;
 			}
 		}
-		affine_sub_y_acc += (io_affine_sub_y_mantissa << 6) << io_affine_sub_y_exponent;
+		affine_sub_y_acc += io_affine_sub_y_mantissa << (7 + io_affine_sub_y_exponent);
 		incs = affine_sub_y_acc / 0x10000;
 		affine_sub_y_acc &= 0xffff;
 		if (incs) {
