@@ -155,8 +155,8 @@ video_reset()
 	io_rddata[1] = 0;
 
 	io_affine_inc0 = 0;
-	affine_sub_x_acc = 0x10000;
-	affine_sub_y_acc = 0x10000;
+	affine_sub_x_acc = 0x8000;
+	affine_sub_y_acc = 0x8000;
 	affine_blitcache_offset = 0;
 	
 	ien = 0;
@@ -1563,8 +1563,8 @@ void video_write(uint8_t reg, uint8_t value) {
 			
 			io_dcsel = (value >> 1) & 3;
 			if (io_dcsel & 2) { // setting affine mode resets subpixels
-				affine_sub_x_acc = 0x10000;
-				affine_sub_y_acc = 0x10000;
+				affine_sub_x_acc = 0x8000;
+				affine_sub_y_acc = 0x8000;
 				affine_blitcache_offset = 0;
 			}
 			
