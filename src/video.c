@@ -342,17 +342,17 @@ refresh_layer_properties(const uint8_t layer)
 		props->vscroll = 0;
 	}
 
-	uint16_t mapw = 0;
-	uint16_t maph = 0;
+	// We now allow these to be set in bitmap mode
+	// because they have special meaning for affine helper
+	props->mapw_log2 = 5 + ((reg_layer[layer][0] >> 4) & 3);
+	props->maph_log2 = 5 + ((reg_layer[layer][0] >> 6) & 3);
+	uint16_t mapw = 1 << props->mapw_log2;
+	uint16_t maph = 1 << props->maph_log2;
+
 	props->tilew = 0;
 	props->tileh = 0;
 
 	if (props->tile_mode || props->text_mode) {
-		props->mapw_log2 = 5 + ((reg_layer[layer][0] >> 4) & 3);
-		props->maph_log2 = 5 + ((reg_layer[layer][0] >> 6) & 3);
-		mapw      = 1 << props->mapw_log2;
-		maph      = 1 << props->maph_log2;
-
 		// Scale the tiles or text characters according to TILEW and TILEH.
 		props->tilew_log2 = 3 + (reg_layer[layer][2] & 1);
 		props->tileh_log2 = 3 + ((reg_layer[layer][2] >> 1) & 1);
@@ -1270,7 +1270,10 @@ get_and_inc_address(uint8_t sel)
 {
 	uint32_t address = io_addr[sel];
 
-	if (io_dcsel == 2 && sel == 1) {
+	if (io_dcsel & 2 && sel == 1) {
+		// This is the routine that calculates the next address if the affine helper
+		// is turned on, that is if the high bit of io_dcsel is set
+		//
 		// io_affine_tex_alignment_behavior
 		//  0 = no address manipulation, simple addition
 		//  1 = texture looped inside x/y
@@ -1658,6 +1661,7 @@ video_update_title(const char* window_title)
 	SDL_SetWindowTitle(window, window_title);
 }
 
+// unused function?
 bool video_is_tilemap_address(int addr)
 {
 	for (int l = 0; l < 2; ++l) {
