@@ -1287,6 +1287,8 @@ get_and_inc_address(uint8_t sel)
 		const struct video_layer_properties *props = &layer_properties[io_affine_tex_layer];
 		uint8_t tex_row_width_bytes_log2 = (props->mapw_log2 + props->color_depth - 3);
 		uint8_t tex_size_bytes_log2 = props->maph_log2 + tex_row_width_bytes_log2;
+		uint32_t tex_row_width_bytes = 1 << tex_row_width_bytes_log2;
+		uint32_t tex_size_bytes = 1 << tex_size_bytes_log2;
 
 		affine_sub_x_acc += io_affine_sub_x_mantissa << (7 + io_affine_sub_x_exponent);
 		incs = affine_sub_x_acc / 0x10000;
@@ -1297,11 +1299,11 @@ get_and_inc_address(uint8_t sel)
 			} else {
 				addrmask = (1 << tex_row_width_bytes_log2) - 1;
 				addr_offset = (io_addr[1] & addrmask);
-				io_addr[1] = (io_addr[1] & ~addrmask);
+				io_addr[1] = (((io_addr[1] & (tex_size_bytes-1)) | props->map_base) & ~addrmask);
 				addr_offset += (incs * increments[io_affine_inc0]);
 				if (io_affine_tex_alignment_behavior == 2)
 					io_addr[1] += (addr_offset >> tex_row_width_bytes_log2) << tex_size_bytes_log2;
-				addr_offset %= (1 << tex_row_width_bytes_log2);
+				addr_offset %= tex_row_width_bytes;
 				io_addr[1] += addr_offset;
 			}
 		}
@@ -1314,11 +1316,11 @@ get_and_inc_address(uint8_t sel)
 			} else {
 				addrmask = (1 << tex_size_bytes_log2) - 1;
 				addr_offset = (io_addr[1] & addrmask);
-				io_addr[1] = (io_addr[1] & ~addrmask);
+				io_addr[1] = (((io_addr[1] & (tex_size_bytes-1)) | props->map_base) & ~addrmask);
 				addr_offset += (incs * increments[io_inc[1]]);
 				if (io_affine_tex_alignment_behavior & 2) // 
 					io_addr[1] += (addr_offset >> tex_size_bytes_log2) << (tex_size_bytes_log2 + 1); // The plus 1 is how many additional textures are on the virtual map in a row
-				addr_offset %= (1 << tex_size_bytes_log2);
+				addr_offset %= tex_size_bytes;
 				io_addr[1] += addr_offset;
 			}
 		}
