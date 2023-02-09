@@ -1288,8 +1288,10 @@ get_and_inc_address(uint8_t sel)
 		uint32_t addr_offset;
 
 		const struct video_layer_properties *props = &layer_properties[io_affine_tex_layer];
-		uint8_t tex_row_width_bytes_log2 = (props->mapw_log2 + props->color_depth - 3);
-		uint8_t tex_size_bytes_log2 = props->maph_log2 + tex_row_width_bytes_log2;
+		// use mapw/2 as texture row size.  Range = 16-128 pixels
+		uint8_t tex_row_width_bytes_log2 = (props->mapw_log2 + props->color_depth - 4);
+		// use maph/2 as texture size.  Range = 16-128 pixels
+		uint8_t tex_size_bytes_log2 = props->maph_log2 - 1 + tex_row_width_bytes_log2;
 		uint32_t tex_row_width_bytes = 1 << tex_row_width_bytes_log2;
 		uint32_t tex_size_bytes = 1 << tex_size_bytes_log2;
 
