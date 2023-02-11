@@ -1362,7 +1362,7 @@ get_and_inc_address(uint8_t sel)
 		io_addr[sel] += increments[io_inc[sel]];
 	}
 
-	return address;
+	return (address & 0x1ffff);
 }
 
 static void
@@ -1463,6 +1463,16 @@ uint8_t video_read(uint8_t reg, bool debugOn) {
 				if (io_wrpattern[reg - 3] == 0x3 && (address % 4 == 0)) {
 					video_space_read_range(blitcache, address, 4);
 				} else if (io_dcsel & 2 && reg - 3 == 1) { // affine cache read
+					if (io_affine_tex_alignment_behavior & 2) {
+						const struct video_layer_properties *props = &layer_properties[io_affine_tex_layer];
+						// use mapw/2 as texture row size.  Range = 16-128 pixels
+						uint8_t tex_row_width_bytes_log2 = (props->mapw_log2 + props->color_depth - 4);
+						// use maph/2 as texture size.  Range = 16-128 pixels
+						uint8_t tex_size_bytes_log2 = props->maph_log2 - 1 + tex_row_width_bytes_log2;
+						uint32_t tex_size_bytes = 1 << tex_size_bytes_log2;
+						if ((address & ~(tex_size_bytes - 1)) != props->map_base)
+							value = 0;
+					}
 					blitcache[affine_blitcache_offset++] = value;
 					affine_blitcache_offset &= 0x3;
 				}
