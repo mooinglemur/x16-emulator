@@ -98,6 +98,11 @@ static uint8_t io_affine_tex_layer;
 
 static uint8_t affine_blitcache_offset;
 
+static bool affine_row_initialized;
+static uint32_t affine_row_addr;
+static uint32_t affine_row_sub_x_acc;
+static uint32_t affine_row_sub_y_acc;
+
 // 16.16 fixed point
 static uint32_t affine_sub_x_acc;
 static uint32_t affine_sub_y_acc;
@@ -159,6 +164,20 @@ video_reset()
 	affine_sub_y_acc = 0x8000;
 	affine_blitcache_offset = 0;
 	
+	io_affine_sub_x_mantissa = 0;
+	io_affine_sub_x_exponent = 1;
+
+	io_affine_sub_y_mantissa = 0;
+	io_affine_sub_y_exponent = 1;
+
+	io_affine_tex_alignment_behavior = 0;
+	io_affine_tex_layer = 0;
+
+	affine_row_initialized = false;
+	affine_row_addr = 0;
+	affine_row_sub_x_acc = 0;
+	affine_row_sub_y_acc = 0;
+
 	ien = 0;
 	isr = 0;
 	irq_line = 0;
@@ -1265,75 +1284,116 @@ static const int increments[32] = {
 	640, -640,
 };
 
+static void affine_inc_address(uint32_t x_sub, uint32_t y_sub, uint8_t x_inc, uint8_t y_inc) {
+	// This is the routine that calculates the next address if the affine helper
+	// is turned on, that is if the high bit of io_dcsel is set
+	//
+	// io_affine_tex_alignment_behavior
+	//  0 = no address manipulation, simple addition
+	//  1 = texture looped inside x/y
+	//  2 = jump to adjacent texture's address when crossing a boundary
+	//      textures are arranged on a 2-wide grid layout for this purpose
+	//      thus wrapping off the bottom jumps 2 textures ahead
+	//  3 = texture looped inside x but has the behavior of #2 for the y coordinate
+
+	// affine_sub_xy_acc is a 16.16 fixed point pixel.subpixel accumulator
+	uint16_t incs;
+	uint32_t addrmask;
+	uint32_t addr_offset;
+
+	const struct video_layer_properties *props = &layer_properties[io_affine_tex_layer];
+	// use mapw/2 as texture row size.  Range = 16-128 pixels
+	uint8_t tex_row_width_bytes_log2 = (props->mapw_log2 + props->color_depth - 4);
+	// use maph/2 as texture size.  Range = 16-128 pixels
+	uint8_t tex_size_bytes_log2 = props->maph_log2 - 1 + tex_row_width_bytes_log2;
+	uint32_t tex_row_width_bytes = 1 << tex_row_width_bytes_log2;
+	uint32_t tex_size_bytes = 1 << tex_size_bytes_log2;
+
+	affine_sub_x_acc += x_sub;
+	incs = affine_sub_x_acc / 0x10000;
+	affine_sub_x_acc &= 0xffff;
+	if (incs) {
+		if (io_affine_tex_alignment_behavior == 0) {
+			io_addr[1] += (incs * increments[x_inc]);
+		} else {
+			addrmask = tex_row_width_bytes - 1;
+			addr_offset = (io_addr[1] & addrmask);
+			addr_offset += (incs * increments[x_inc]);
+			io_addr[1] = io_addr[1] & ~addrmask;
+			io_addr[1] += (addr_offset >> tex_row_width_bytes_log2) << tex_size_bytes_log2;
+			if (io_affine_tex_alignment_behavior & 1) {
+				io_addr[1] = (io_addr[1] & (tex_size_bytes-1)) | props->map_base;
+			}
+			addr_offset = addr_offset % tex_row_width_bytes;
+			io_addr[1] += addr_offset;
+		}
+	}
+	affine_sub_y_acc += y_sub;
+	incs = affine_sub_y_acc / 0x10000;
+	affine_sub_y_acc &= 0xffff;
+	if (incs) {
+		if (io_affine_tex_alignment_behavior == 0) {
+			io_addr[1] += (incs * increments[y_inc]);
+		} else {
+			addrmask = tex_size_bytes - 1;
+			addr_offset = (io_addr[1] & addrmask);
+			addr_offset += (incs * increments[y_inc]);
+			io_addr[1] = io_addr[1] & ~addrmask;
+			io_addr[1] += (addr_offset >> tex_size_bytes_log2) << (tex_size_bytes_log2 + 1); // The plus 1 is how many additional textures are on the virtual map in a row. Rows are thus 2 textures wide (or in other words, crossing the top or bottom boundary advances by 2 textures).
+			if (io_affine_tex_alignment_behavior == 1) {
+				io_addr[1] = (io_addr[1] & (tex_size_bytes-1)) | props->map_base;
+			}
+			addr_offset = addr_offset % tex_size_bytes;
+			io_addr[1] += addr_offset;
+		}
+	}
+}
+
 uint32_t
 get_and_inc_address(uint8_t sel)
 {
 	uint32_t address = io_addr[sel];
 
 	if (io_dcsel & 2 && sel == 1) {
-		// This is the routine that calculates the next address if the affine helper
-		// is turned on, that is if the high bit of io_dcsel is set
-		//
-		// io_affine_tex_alignment_behavior
-		//  0 = no address manipulation, simple addition
-		//  1 = texture looped inside x/y
-		//  2 = jump to adjacent texture's address when crossing a boundary
-		//      textures are arranged on a 2-wide grid layout for this purpose
-		//      thus wrapping off the bottom jumps 2 textures ahead
-		//  3 = texture looped inside x but has the behavior of #2 for the y coordinate
-
-		// affine_sub_xy_acc is a 16.16 fixed point pixel.subpixel accumulator
-		uint16_t incs;
-		uint32_t addrmask;
-		uint32_t addr_offset;
-
-		const struct video_layer_properties *props = &layer_properties[io_affine_tex_layer];
-		// use mapw/2 as texture row size.  Range = 16-128 pixels
-		uint8_t tex_row_width_bytes_log2 = (props->mapw_log2 + props->color_depth - 4);
-		// use maph/2 as texture size.  Range = 16-128 pixels
-		uint8_t tex_size_bytes_log2 = props->maph_log2 - 1 + tex_row_width_bytes_log2;
-		uint32_t tex_row_width_bytes = 1 << tex_row_width_bytes_log2;
-		uint32_t tex_size_bytes = 1 << tex_size_bytes_log2;
-
-		affine_sub_x_acc += io_affine_sub_x_mantissa << (7 + io_affine_sub_x_exponent);
-		incs = affine_sub_x_acc / 0x10000;
-		affine_sub_x_acc &= 0xffff;
-		if (incs) {
-			if (io_affine_tex_alignment_behavior == 0) {
-				io_addr[1] += (incs * increments[io_affine_inc0]);
-			} else {
-				addrmask = (1 << tex_row_width_bytes_log2) - 1;
-				addr_offset = (io_addr[1] & addrmask);
-				io_addr[1] = (((io_addr[1] & (tex_size_bytes-1)) | props->map_base) & ~addrmask);
-				addr_offset += (incs * increments[io_affine_inc0]);
-				if (io_affine_tex_alignment_behavior == 2)
-					io_addr[1] += (addr_offset >> tex_row_width_bytes_log2) << tex_size_bytes_log2;
-				addr_offset %= tex_row_width_bytes;
-				io_addr[1] += addr_offset;
-			}
-		}
-		affine_sub_y_acc += io_affine_sub_y_mantissa << (7 + io_affine_sub_y_exponent);
-		incs = affine_sub_y_acc / 0x10000;
-		affine_sub_y_acc &= 0xffff;
-		if (incs) {
-			if (io_affine_tex_alignment_behavior == 0) {
-				io_addr[1] += (incs * increments[io_inc[1]]);
-			} else {
-				addrmask = (1 << tex_size_bytes_log2) - 1;
-				addr_offset = (io_addr[1] & addrmask);
-				io_addr[1] = (((io_addr[1] & (tex_size_bytes-1)) | props->map_base) & ~addrmask);
-				addr_offset += (incs * increments[io_inc[1]]);
-				if (io_affine_tex_alignment_behavior & 2) // 
-					io_addr[1] += (addr_offset >> tex_size_bytes_log2) << (tex_size_bytes_log2 + 1); // The plus 1 is how many additional textures are on the virtual map in a row
-				addr_offset %= tex_size_bytes;
-				io_addr[1] += addr_offset;
-			}
-		}
+		uint32_t x_sub = io_affine_sub_x_mantissa << (7 + io_affine_sub_x_exponent);
+		uint32_t y_sub = io_affine_sub_y_mantissa << (7 + io_affine_sub_y_exponent);
+		affine_inc_address(x_sub, y_sub, io_affine_inc0, io_inc[1]);
 	} else {
 		io_addr[sel] += increments[io_inc[sel]];
 	}
 
 	return address;
+}
+
+static void
+affine_next_row(void)
+{
+	if (affine_row_initialized) {
+		// Return to start of line
+		io_addr[1] = affine_row_addr;
+		affine_sub_x_acc = affine_row_sub_x_acc;
+		affine_sub_y_acc = affine_row_sub_y_acc;
+
+		// Rotate vector 90 degrees clockwise (swap axis increments' absolute values)
+		uint32_t x_sub = io_affine_sub_y_mantissa << (7 + io_affine_sub_y_exponent);
+		uint32_t y_sub = io_affine_sub_x_mantissa << (7 + io_affine_sub_x_exponent);
+		// x+ y+ -> x- y+
+		// x- y+ -> x- y-
+		// x- y- -> x+ y-
+		// x+ y- -> x+ y+
+		// Sign is in the low bit of io_inc[#] and io_affine_inc0
+		// x_inc = affine_inc_0 but with the inverted sign of io_inc[1]
+		// y_inc = io_inc[1] but with the sign of affine_inc_0
+		uint8_t x_inc = ((io_inc[1] ^ 1) & 1) | (io_affine_inc0 & ~1);
+		uint8_t y_inc = (io_affine_inc0 & 1) | (io_inc[1] & ~1);
+		
+		affine_inc_address(x_sub, y_sub, x_inc, y_inc);
+		io_rddata[1] = video_space_read(io_addr[1]);
+	}
+	affine_row_addr = io_addr[1];
+	affine_row_sub_x_acc = affine_sub_x_acc;
+	affine_row_sub_y_acc = affine_sub_y_acc;
+	affine_row_initialized = true;
 }
 
 //
@@ -1423,8 +1483,36 @@ uint8_t video_read(uint8_t reg, bool debugOn) {
 		case 0x09:
 		case 0x0A:
 		case 0x0B:
-		case 0x0C: return reg_composer[reg - 0x09 + (io_dcsel << 2)];
-
+		case 0x0C:
+			int i = reg - 0x09 + (io_dcsel << 2);
+			switch (i) {
+				case 0x8:
+					return io_affine_sub_x_mantissa & 0xff;
+				case 0x9:
+					return ((io_affine_sub_x_mantissa & 0x300) >> 8) |
+						(io_affine_sub_x_exponent << 2) |
+						((io_affine_inc0 & 0x1) << 7) |
+						((io_affine_inc0 & 0x6) << 4);
+				case 0xa:
+					return io_affine_sub_y_mantissa & 0xff;
+				case 0xb:
+					return ((io_affine_sub_y_mantissa & 0x300) >> 8) |
+						(io_affine_sub_y_exponent << 2);
+				case 0xc:
+					return (affine_sub_x_acc >> 7) & 0xff;
+				case 0xd:
+					return (affine_sub_y_acc >> 7) & 0xff;
+				case 0xe:
+					return ((affine_sub_x_acc >> 15) & 0x1) |
+						((affine_sub_y_acc >> 14) & 0x2) |
+						(io_affine_tex_alignment_behavior << 2) |
+						(io_affine_tex_layer << 5);
+				case 0xf:
+					// unused/reserved
+					return 0;
+				default:
+					return reg_composer[i];
+			}
 		case 0x0D:
 		case 0x0E:
 		case 0x0F:
@@ -1460,16 +1548,22 @@ void video_write(uint8_t reg, uint8_t value) {
 		case 0x00:
 			io_addr[io_addrsel] = (io_addr[io_addrsel] & 0x1ff00) | value;
 			io_rddata[io_addrsel] = video_space_read(io_addr[io_addrsel]);
+			if (io_addrsel)
+				affine_row_initialized = false;
 			break;
 		case 0x01:
 			io_addr[io_addrsel] = (io_addr[io_addrsel] & 0x100ff) | (value << 8);
 			io_rddata[io_addrsel] = video_space_read(io_addr[io_addrsel]);
+			if (io_addrsel)
+				affine_row_initialized = false;
 			break;
 		case 0x02:
 			io_addr[io_addrsel] = (io_addr[io_addrsel] & 0x0ffff) | ((value & 0x1) << 16);
 			io_wrpattern[io_addrsel] = (value >> 1) & 0x3;
 			io_inc[io_addrsel]  = value >> 3;
 			io_rddata[io_addrsel] = video_space_read(io_addr[io_addrsel]);
+			if (io_addrsel)
+				affine_row_initialized = false;
 			break;
 		case 0x03:
 		case 0x04: {
@@ -1561,13 +1655,7 @@ void video_write(uint8_t reg, uint8_t value) {
 				video_reset();
 			}
 			
-			io_dcsel = (value >> 1) & 3;
-			if (io_dcsel & 2) { // setting affine mode resets subpixels
-				affine_sub_x_acc = 0x8000;
-				affine_sub_y_acc = 0x8000;
-				affine_blitcache_offset = 0;
-			}
-			
+			io_dcsel = (value >> 1) & 3;			
 			io_addrsel = value & 1;
 			break;
 		case 0x06:
@@ -1599,24 +1687,40 @@ void video_write(uint8_t reg, uint8_t value) {
 					break;
 				case 0x8:
 					io_affine_sub_x_mantissa = (io_affine_sub_x_mantissa & 0x0300) | value;
-					reg_composer[i] = value;
 					break;
 				case 0x9:
 					io_affine_sub_x_mantissa = (io_affine_sub_x_mantissa & 0x00ff) | ((value & 0x3) << 8);
 					io_affine_sub_x_exponent = (value >> 2) & 0x7;
 					io_affine_inc0 = ((value >> 7) & 0x1) | ((value >> 4) & 0x6);
-					reg_composer[i] = value;
 					break;
 				case 0xa:
 					io_affine_sub_y_mantissa = (io_affine_sub_y_mantissa & 0x0300) | value;
-					reg_composer[i] = value;
 					break;
 				case 0xb:
 					io_affine_sub_y_mantissa = (io_affine_sub_y_mantissa & 0x00ff) | ((value & 0x3) << 8);
 					io_affine_sub_y_exponent = (value >> 2) & 0x7;
-					io_affine_tex_alignment_behavior = (value >> 5) & 0x3;
-					io_affine_tex_layer = (value >> 7) & 0x1;
-					// fallthrough
+					if (value & 0x20)
+						affine_next_row();
+					if (value & 0x40)
+						affine_blitcache_offset = 0;
+					if (value & 0x80)
+						affine_sub_x_acc = affine_sub_y_acc = 0x8000;
+					break;
+				case 0xc:
+					affine_sub_x_acc = (affine_sub_x_acc & 0x8000) | (value << 7);
+					break;
+				case 0xd:
+					affine_sub_y_acc = (affine_sub_y_acc & 0x8000) | (value << 7);
+					break;
+				case 0xe:
+					affine_sub_x_acc = (affine_sub_x_acc & 0x7f80) | ((value & 0x1) << 15);
+					affine_sub_y_acc = (affine_sub_y_acc & 0x7f80) | ((value & 0x2) << 14);
+					io_affine_tex_alignment_behavior = (value & 0xc) >> 2;
+					io_affine_tex_layer = (value & 0x20) >> 5;
+					break;
+				case 0xf:
+					// unused/reserved
+					break;
 				default:
 					reg_composer[i] = value;
 					break;
