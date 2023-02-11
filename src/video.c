@@ -1493,7 +1493,7 @@ uint8_t video_read(uint8_t reg, bool debugOn) {
 		case 0x09:
 		case 0x0A:
 		case 0x0B:
-		case 0x0C:
+		case 0x0C: {
 			int i = reg - 0x09 + (io_dcsel << 2);
 			switch (i) {
 				case 0x8:
@@ -1523,6 +1523,7 @@ uint8_t video_read(uint8_t reg, bool debugOn) {
 				default:
 					return reg_composer[i];
 			}
+		}
 		case 0x0D:
 		case 0x0E:
 		case 0x0F:
