@@ -113,7 +113,7 @@ jobs:
         run: cd emu_binaries; tar cvzf ../X16-Emu_Linux_64-bit.tar.gz ./
       - uses: actions/upload-artifact@v3
         with:
-          name: X16-Emu Linux 64-bit
+          name: X16-Emu_Linux_64-bit.tar.gz
           path: X16-Emu_Linux_64-bit.tar.gz
   build-darwin-11-x64:
     # this is currently macos-11, Big Sur
