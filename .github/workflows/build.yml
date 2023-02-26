@@ -109,12 +109,12 @@ jobs:
         run: |
           cp latest_rom/rom.bin emu_binaries/.
           cp latest_rom/*.sym emu_binaries/.
+      - name: Package Application
+        run: cd emu_binaries; tar cvzf ../X16-Emu_Linux_64-bit.tar.gz ./
       - uses: actions/upload-artifact@v3
         with:
           name: X16-Emu Linux 64-bit
-          path: emu_binaries/
-          archive: tar
-          compression: gz
+          path: X16-Emu_Linux_64-bit.tar.gz
   build-darwin-11-x64:
     # this is currently macos-11, Big Sur
     runs-on: macos-11
