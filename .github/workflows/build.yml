@@ -24,10 +24,18 @@ jobs:
           make -j4
           make install
       - name: Build ROM
+        if: ! startsWith(github.ref, 'refs/tags/r')
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
           CA65_INC=/share/cc65/asminc make
+      - name: Build Release ROM
+        if: startsWith(github.ref, 'refs/tags/r')
+        run: |
+          git clone https://github.com/X16Community/x16-rom.git
+          cd x16-rom
+          git checkout "$GITHUB_REF"
+          PRERELEASE_VERSION=$(echo "$GITHUB_REF_NAME" | grep -oP '[0-9]+$') CA65_INC=/share/cc65/asminc make
       - name: Copy ROM symbols
         run: |
           cp x16-rom/build/x16/*.h src/.
@@ -74,10 +82,18 @@ jobs:
           make -j4
           make install
       - name: Build ROM
+        if: ! startsWith(github.ref, 'refs/tags/r')
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
           CA65_INC=/share/cc65/asminc make
+      - name: Build Release ROM
+        if: startsWith(github.ref, 'refs/tags/r')
+        run: |
+          git clone https://github.com/X16Community/x16-rom.git
+          cd x16-rom
+          git checkout "$GITHUB_REF"
+          PRERELEASE_VERSION=$(echo "$GITHUB_REF_NAME" | grep -oP '[0-9]+$') CA65_INC=/share/cc65/asminc make
       - name: Copy ROM symbols
         run: |
           cp x16-rom/build/x16/*.h src/.
@@ -115,10 +131,18 @@ jobs:
           make -j4
           sudo make install
       - name: Build ROM
+        if: ! startsWith(github.ref, 'refs/tags/r')
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
           make
+      - name: Build Release ROM
+        if: startsWith(github.ref, 'refs/tags/r')
+        run: |
+          git clone https://github.com/X16Community/x16-rom.git
+          cd x16-rom
+          git checkout "$GITHUB_REF"
+          PRERELEASE_VERSION=$(echo "$GITHUB_REF_NAME" | grep -oP '[0-9]+$') make
       - name: Copy ROM symbols
         run: |
           cp x16-rom/build/x16/*.h src/.
@@ -156,10 +180,18 @@ jobs:
           make -j4
           sudo make install
       - name: Build ROM
+        if: ! startsWith(github.ref, 'refs/tags/r')
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
           make
+      - name: Build Release ROM
+        if: startsWith(github.ref, 'refs/tags/r')
+        run: |
+          git clone https://github.com/X16Community/x16-rom.git
+          cd x16-rom
+          git checkout "$GITHUB_REF"
+          PRERELEASE_VERSION=$(echo "$GITHUB_REF_NAME" | grep -oP '[0-9]+$') make
       - name: Copy ROM symbols
         run: |
           cp x16-rom/build/x16/*.h src/.
@@ -180,7 +212,6 @@ jobs:
             cp makecart emu_binaries/.
             file emu_binaries/*
       - name: Copy ROM
-        # this build makes emu_binaries owned by root, so easy workaround
         run: |
           sudo cp x16-rom/build/x16/rom.bin emu_binaries/.
           sudo cp x16-rom/build/x16/*.sym emu_binaries/.
@@ -206,10 +237,18 @@ jobs:
           make -j4
           sudo make install
       - name: Build ROM
+        if: ! startsWith(github.ref, 'refs/tags/r')
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
           make
+      - name: Build Release ROM
+        if: startsWith(github.ref, 'refs/tags/r')
+        run: |
+          git clone https://github.com/X16Community/x16-rom.git
+          cd x16-rom
+          git checkout "$GITHUB_REF"
+          PRERELEASE_VERSION=$(echo "$GITHUB_REF_NAME" | grep -oP '[0-9]+$') make
       - name: Copy ROM symbols
         run: |
           cp x16-rom/build/x16/*.h src/.
@@ -230,7 +269,6 @@ jobs:
             cp makecart emu_binaries/.
             file emu_binaries/*
       - name: Copy ROM
-        # this build makes emu_binaries owned by root, so easy workaround
         run: |
           sudo cp x16-rom/build/x16/rom.bin emu_binaries/.
           sudo cp x16-rom/build/x16/*.sym emu_binaries/.
@@ -256,10 +294,18 @@ jobs:
           PREFIX=/usr/local make -j4
           sudo PREFIX=/usr/local make install
       - name: Build ROM
+        if: ! startsWith(github.ref, 'refs/tags/r')
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
           make
+      - name: Build Release ROM
+        if: startsWith(github.ref, 'refs/tags/r')
+        run: |
+          git clone https://github.com/X16Community/x16-rom.git
+          cd x16-rom
+          git checkout "$GITHUB_REF"
+          PRERELEASE_VERSION=$(echo "$GITHUB_REF_NAME" | grep -oP '[0-9]+$') make
       - name: Copy ROM symbols
         run: |
           cp x16-rom/build/x16/*.h src/.
@@ -296,10 +342,18 @@ jobs:
           make -j4
           sudo make install
       - name: Build ROM
+        if: ! startsWith(github.ref, 'refs/tags/r')
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
           make
+      - name: Build Release ROM
+        if: startsWith(github.ref, 'refs/tags/r')
+        run: |
+          git clone https://github.com/X16Community/x16-rom.git
+          cd x16-rom
+          git checkout "$GITHUB_REF"
+          PRERELEASE_VERSION=$(echo "$GITHUB_REF_NAME" | grep -oP '[0-9]+$') make
       - name: Copy ROM symbols
         run: |
           cp x16-rom/build/x16/*.h src/.
