@@ -24,7 +24,7 @@ jobs:
           make -j4
           make install
       - name: Build ROM
-        if: ! startsWith(github.ref, 'refs/tags/r')
+        if: startsWith(github.ref, 'refs/tags/r') != true
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
@@ -82,7 +82,7 @@ jobs:
           make -j4
           make install
       - name: Build ROM
-        if: ! startsWith(github.ref, 'refs/tags/r')
+        if: startsWith(github.ref, 'refs/tags/r') != true
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
@@ -131,7 +131,7 @@ jobs:
           make -j4
           sudo make install
       - name: Build ROM
-        if: ! startsWith(github.ref, 'refs/tags/r')
+        if: startsWith(github.ref, 'refs/tags/r') != true
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
@@ -180,7 +180,7 @@ jobs:
           make -j4
           sudo make install
       - name: Build ROM
-        if: ! startsWith(github.ref, 'refs/tags/r')
+        if: startsWith(github.ref, 'refs/tags/r') != true
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
@@ -237,7 +237,7 @@ jobs:
           make -j4
           sudo make install
       - name: Build ROM
-        if: ! startsWith(github.ref, 'refs/tags/r')
+        if: startsWith(github.ref, 'refs/tags/r') != true
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
@@ -294,7 +294,7 @@ jobs:
           PREFIX=/usr/local make -j4
           sudo PREFIX=/usr/local make install
       - name: Build ROM
-        if: ! startsWith(github.ref, 'refs/tags/r')
+        if: startsWith(github.ref, 'refs/tags/r') != true
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
@@ -342,7 +342,7 @@ jobs:
           make -j4
           sudo make install
       - name: Build ROM
-        if: ! startsWith(github.ref, 'refs/tags/r')
+        if: startsWith(github.ref, 'refs/tags/r') != true
         run: |
           git clone https://github.com/X16Community/x16-rom.git
           cd x16-rom
