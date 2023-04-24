@@ -300,8 +300,9 @@ jobs:
       - name: Build ROM
         if: startsWith(github.ref, 'refs/tags/r') != true
         run: |
-          git clone https://github.com/X16Community/x16-rom.git
+          git clone https://github.com/mooinglemur/x16-rom.git
           cd x16-rom
+          git checkout 20230424-macbuildfix
           make
       - name: Build Release ROM
         if: startsWith(github.ref, 'refs/tags/r')
