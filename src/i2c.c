@@ -31,6 +31,10 @@ uint8_t kbd_buffer[KBD_SIZE];						//Ring buffer for key codes
 #define MSE_SIZE 8
 uint8_t mse_buffer[MSE_SIZE];						//Ring buffer for mouse movement data
 
+static int dbgi = 0;
+uint8_t primes[] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53};
+
+
 void i2c_reset_state() {
 	state = STATE_STOP;
 	read_mode = false;
@@ -47,6 +51,11 @@ i2c_read(uint8_t device, uint8_t offset) {
 			return smc_read(offset);
 		case DEVICE_RTC:
 			return rtc_read(offset);
+		case 0x44:
+			uint8_t p = primes[dbgi];
+			dbgi++;
+			if (dbgi >= 16) dbgi = 0;
+			return p;
 		default:
 			value = 0xff;
 	}
@@ -140,12 +149,13 @@ i2c_step()
 						case 0:
 							device = value >> 1;
 							read_mode = value & 1;
-							if (device != DEVICE_SMC && device != DEVICE_RTC) {
+							if (device != DEVICE_SMC && device != DEVICE_RTC && device != 0x44) {
 								ack = false;
 							}
 							break;
 						case 1:
 							offset = value;
+							dbgi = 0;
 							break;
 						default:
 							i2c_write(device, offset, value);
