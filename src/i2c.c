@@ -52,11 +52,12 @@ i2c_read(uint8_t device, uint8_t offset) {
 			return smc_read(offset);
 		case DEVICE_RTC:
 			return rtc_read(offset);
-		case 0x44:
+		case 0x44: {
 			uint8_t p = primes[dbgi];
 			dbgi++;
 			if (dbgi >= 16) dbgi = 0;
 			return p;
+		}
 		default:
 			value = 0xff;
 	}
