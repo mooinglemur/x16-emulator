@@ -1916,6 +1916,11 @@ void video_write(uint8_t reg, uint8_t value) {
 			break;
 		case 0x03:
 		case 0x04: {
+			// XXX: Experimental feature: masked nibble writes in affine mode
+			if (fx_2bit_poly && fx_addr1_mode == 3 && (reg - 3) == 1) {
+				value = fx_nibble_bit[reg - 3] ? value & 0x0f : value & 0xf0;
+			}
+
 			if (fx_2bit_poking && fx_addr1_mode) {
 				fx_2bit_poking = false;
 				uint8_t mask = value >> 6;
